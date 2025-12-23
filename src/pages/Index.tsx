@@ -102,7 +102,7 @@ const Index = () => {
             <span className="text-background font-mono text-sm font-semibold">ƒ</span>
           </div>
           <div>
-            <h1 className="text-base font-semibold tracking-tight">PolyGraph</h1>
+            <h1 className="text-base font-semibold tracking-tight">Equation illustrator</h1>
           </div>
         </div>
         
