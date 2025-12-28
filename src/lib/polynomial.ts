@@ -69,6 +69,12 @@ function subtractPolynomials(p1: number[], p2: number[]): number[] {
   return result;
 }
 
+// Helper: Divide polynomial by scalar
+function dividePolynomialByScalar(p: number[], scalar: number): number[] | null {
+  if (scalar === 0) return null;
+  return p.map(coeff => coeff / scalar);
+}
+
 // Helper: Raise polynomial to a power
 function powerPolynomial(p: number[], n: number): number[] {
   if (n === 0) return [1];
@@ -81,21 +87,8 @@ function powerPolynomial(p: number[], n: number): number[] {
   return result;
 }
 
-// Parse a simple polynomial term or expression in parentheses
-function parseSimpleExpression(expr: string): number[] | null {
-  expr = expr.trim();
-  
-  // Check if it's a parenthesized expression
-  if (expr.startsWith('(') && expr.endsWith(')')) {
-    return parsePolynomial(expr.substring(1, expr.length - 1));
-  }
-  
-  // Parse as a simple polynomial
-  return parseSimplePolynomial(expr);
-}
-
-// Parse polynomial without multiplication/division operations
-function parseSimplePolynomial(expression: string): number[] | null {
+// Parse a basic polynomial (no operations, just terms)
+function parseBasicPolynomial(expression: string): number[] | null {
   let cleaned = expression.replace(/\s/g, '').toLowerCase();
   
   if (!cleaned) return null;
@@ -122,15 +115,15 @@ function parseSimplePolynomial(expression: string): number[] | null {
       } else if (coeffPart === '-') {
         coefficient = -1;
       } else {
-        coefficient = parseFloat(coeffPart.replace('*', ''));
-        if (isNaN(coefficient)) coefficient = 1;
+        const parsed = parseFloat(coeffPart.replace('*', ''));
+        coefficient = isNaN(parsed) ? 1 : parsed;
       }
       
       // Parse power
       let power = 1;
       if (powerPart && powerPart.startsWith('^')) {
-        power = parseInt(powerPart.substring(1));
-        if (isNaN(power)) power = 1;
+        const parsed = parseInt(powerPart.substring(1));
+        power = isNaN(parsed) ? 1 : parsed;
       }
       
       const current = coefficients.get(power) || 0;
@@ -157,106 +150,183 @@ function parseSimplePolynomial(expression: string): number[] | null {
   return result;
 }
 
-// Main parser with support for multiplication, division, and powers
+// Tokenize expression into components
+interface Token {
+  type: 'poly' | 'op' | 'lparen' | 'rparen' | 'power';
+  value: string;
+}
+
+function tokenize(expr: string): Token[] {
+  const tokens: Token[] = [];
+  let i = 0;
+  
+  while (i < expr.length) {
+    const char = expr[i];
+    
+    if (char === '(') {
+      tokens.push({ type: 'lparen', value: '(' });
+      i++;
+    } else if (char === ')') {
+      tokens.push({ type: 'rparen', value: ')' });
+      i++;
+    } else if (char === '+') {
+      tokens.push({ type: 'op', value: '+' });
+      i++;
+    } else if (char === '-') {
+      // Check if it's a negative sign or subtraction
+      if (i === 0 || expr[i-1] === '(' || expr[i-1] === '+' || expr[i-1] === '-' || expr[i-1] === '*' || expr[i-1] === '/') {
+        // It's a negative sign, include it in the next polynomial
+        let j = i + 1;
+        while (j < expr.length && expr[j] !== '+' && expr[j] !== '-' && expr[j] !== '*' && expr[j] !== '/' && expr[j] !== '(' && expr[j] !== ')' && expr[j] !== '^') {
+          j++;
+        }
+        tokens.push({ type: 'poly', value: expr.substring(i, j) });
+        i = j;
+      } else {
+        tokens.push({ type: 'op', value: '-' });
+        i++;
+      }
+    } else if (char === '*') {
+      tokens.push({ type: 'op', value: '*' });
+      i++;
+    } else if (char === '/') {
+      tokens.push({ type: 'op', value: '/' });
+      i++;
+    } else if (char === '^') {
+      tokens.push({ type: 'power', value: '^' });
+      i++;
+    } else if (char !== ' ') {
+      // Read polynomial term
+      let j = i;
+      while (j < expr.length && expr[j] !== '+' && expr[j] !== '-' && expr[j] !== '*' && expr[j] !== '/' && expr[j] !== '(' && expr[j] !== ')' && expr[j] !== '^' && expr[j] !== ' ') {
+        j++;
+      }
+      if (j > i) {
+        tokens.push({ type: 'poly', value: expr.substring(i, j) });
+        i = j;
+      } else {
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+  
+  return tokens;
+}
+
+// Parse expression with proper operator precedence
+function parseExpression(tokens: Token[], start: number = 0, end?: number): { result: number[] | null, endIndex: number } {
+  if (end === undefined) end = tokens.length;
+  
+  // Handle parentheses and build expression tree
+  let i = start;
+  const values: number[][] = [];
+  const operators: string[] = [];
+  
+  while (i < end) {
+    const token = tokens[i];
+    
+    if (token.type === 'lparen') {
+      // Find matching closing parenthesis
+      let depth = 1;
+      let j = i + 1;
+      while (j < end && depth > 0) {
+        if (tokens[j].type === 'lparen') depth++;
+        if (tokens[j].type === 'rparen') depth--;
+        j++;
+      }
+      
+      // Parse the content inside parentheses
+      const inner = parseExpression(tokens, i + 1, j - 1);
+      if (inner.result) {
+        // Check for power after parenthesis
+        if (j < end && tokens[j]?.type === 'power' && j + 1 < end && tokens[j + 1]?.type === 'poly') {
+          const power = parseInt(tokens[j + 1].value);
+          if (!isNaN(power)) {
+            values.push(powerPolynomial(inner.result, power));
+            i = j + 2;
+            continue;
+          }
+        }
+        values.push(inner.result);
+      }
+      i = j;
+    } else if (token.type === 'poly') {
+      const poly = parseBasicPolynomial(token.value);
+      if (poly) {
+        values.push(poly);
+      }
+      i++;
+    } else if (token.type === 'op') {
+      operators.push(token.value);
+      i++;
+    } else {
+      i++;
+    }
+  }
+  
+  if (values.length === 0) return { result: null, endIndex: end };
+  
+  // Apply operators with precedence (*, / before +, -)
+  // First pass: handle * and /
+  let j = 0;
+  while (j < operators.length) {
+    if (operators[j] === '*') {
+      const result = multiplyPolynomials(values[j], values[j + 1]);
+      values.splice(j, 2, result);
+      operators.splice(j, 1);
+    } else if (operators[j] === '/') {
+      // Division: divide by a constant only
+      const divisor = values[j + 1];
+      if (divisor.length === 1) {
+        const result = dividePolynomialByScalar(values[j], divisor[0]);
+        if (result) {
+          values.splice(j, 2, result);
+          operators.splice(j, 1);
+        } else {
+          j++;
+        }
+      } else {
+        // Can't divide by non-constant polynomial
+        j++;
+      }
+    } else {
+      j++;
+    }
+  }
+  
+  // Second pass: handle + and -
+  let result = values[0];
+  j = 0;
+  while (j < operators.length) {
+    if (operators[j] === '+') {
+      result = addPolynomials(result, values[j + 1]);
+    } else if (operators[j] === '-') {
+      result = subtractPolynomials(result, values[j + 1]);
+    }
+    j++;
+  }
+  
+  return { result, endIndex: end };
+}
+
+// Main parser
 export function parsePolynomial(expression: string): number[] | null {
   try {
     let cleaned = expression.replace(/\s/g, '').toLowerCase();
     
     if (!cleaned) return null;
     
-    // Handle parentheses with multiplication: (x+1)(x-2)
-    // First, find all balanced parentheses groups
-    const parenGroups: string[] = [];
-    let depth = 0;
-    let start = -1;
+    // Tokenize the expression
+    const tokens = tokenize(cleaned);
     
-    for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === '(') {
-        if (depth === 0) start = i;
-        depth++;
-      } else if (cleaned[i] === ')') {
-        depth--;
-        if (depth === 0 && start !== -1) {
-          parenGroups.push(cleaned.substring(start, i + 1));
-        }
-      }
-    }
+    if (tokens.length === 0) return null;
     
-    // If we have multiplication of parenthesized expressions
-    if (parenGroups.length > 0) {
-      // Check for patterns like (...)(...) or (...)^n
-      let workingExpr = cleaned;
-      const groupMap = new Map<string, number[]>();
-      
-      // Parse each group
-      for (const group of parenGroups) {
-        const inner = group.substring(1, group.length - 1);
-        const parsed = parseSimplePolynomial(inner);
-        if (parsed) {
-          groupMap.set(group, parsed);
-        }
-      }
-      
-      // Handle powers: (x+1)^2
-      workingExpr = workingExpr.replace(/\(([^)]+)\)\^(\d+)/g, (match, inner, power) => {
-        const p = parseSimplePolynomial(inner);
-        if (p) {
-          const powered = powerPolynomial(p, parseInt(power));
-          const key = `__P${groupMap.size}__`;
-          groupMap.set(key, powered);
-          return key;
-        }
-        return match;
-      });
-      
-      // Replace remaining groups with keys
-      for (const group of parenGroups) {
-        if (groupMap.has(group)) {
-          const key = `__G${Array.from(groupMap.keys()).indexOf(group)}__`;
-          workingExpr = workingExpr.replace(group, key);
-          groupMap.set(key, groupMap.get(group)!);
-        }
-      }
-      
-      // Now handle multiplication
-      // Pattern: __Gn__*__Gm__ or __Gn____Gm__ (implicit)
-      workingExpr = workingExpr.replace(/(__[GP]\d+__)(__[GP]\d+__)/g, '$1*$2');
-      
-      const multPattern = /(__[GP]\d+__)\*(__[GP]\d+__)/;
-      while (multPattern.test(workingExpr)) {
-        workingExpr = workingExpr.replace(multPattern, (match, g1, g2) => {
-          const p1 = groupMap.get(g1);
-          const p2 = groupMap.get(g2);
-          if (p1 && p2) {
-            const result = multiplyPolynomials(p1, p2);
-            const key = `__R${groupMap.size}__`;
-            groupMap.set(key, result);
-            return key;
-          }
-          return match;
-        });
-      }
-      
-      // Handle addition/subtraction with groups
-      const finalKey = Array.from(groupMap.keys()).find(k => workingExpr.includes(k));
-      if (finalKey && groupMap.has(finalKey)) {
-        let result = groupMap.get(finalKey)!;
-        
-        // Handle any remaining additions or subtractions
-        const remainingTerms = workingExpr.replace(finalKey, '').trim();
-        if (remainingTerms) {
-          const additional = parseSimplePolynomial(remainingTerms);
-          if (additional) {
-            result = addPolynomials(result, additional);
-          }
-        }
-        
-        return result;
-      }
-    }
+    // Parse the expression
+    const parsed = parseExpression(tokens);
     
-    // If no special operations, parse as simple polynomial
-    return parseSimplePolynomial(cleaned);
+    return parsed.result;
     
   } catch (error) {
     console.error('Error parsing polynomial:', error);
@@ -289,25 +359,28 @@ export function formatPolynomial(coefficients: number[]): string {
   
   for (let i = coefficients.length - 1; i >= 0; i--) {
     const coeff = coefficients[i];
-    if (coeff === 0) continue;
+    if (Math.abs(coeff) < 1e-10) continue; // Skip near-zero coefficients
     
     let term = '';
     const absCoeff = Math.abs(coeff);
     const sign = coeff > 0 ? '+' : '-';
     
+    // Round to avoid floating point errors
+    const roundedCoeff = Math.round(absCoeff * 1000) / 1000;
+    
     if (i === 0) {
-      term = `${sign} ${absCoeff}`;
+      term = `${sign} ${roundedCoeff}`;
     } else if (i === 1) {
-      if (absCoeff === 1) {
+      if (Math.abs(roundedCoeff - 1) < 1e-10) {
         term = `${sign} x`;
       } else {
-        term = `${sign} ${absCoeff}x`;
+        term = `${sign} ${roundedCoeff}x`;
       }
     } else {
-      if (absCoeff === 1) {
+      if (Math.abs(roundedCoeff - 1) < 1e-10) {
         term = `${sign} x^${i}`;
       } else {
-        term = `${sign} ${absCoeff}x^${i}`;
+        term = `${sign} ${roundedCoeff}x^${i}`;
       }
     }
     
@@ -343,9 +416,11 @@ export const PRESET_POLYNOMIALS = [
   { name: 'Parabola', expression: 'x^2 - 4' },
   { name: 'S-curve', expression: 'x^3 - 3x' },
   { name: 'Quartic', expression: 'x^4 - 5x^2 + 4' },
-  { name: 'Product (x+1)(x-2)', expression: '(x+1)(x-2)' },
-  { name: 'Product (x+2)(x-1)(x-3)', expression: '(x+2)(x-1)(x-3)' },
-  { name: 'Square (x+1)^2', expression: '(x+1)^2' },
-  { name: 'Cube (x-2)^3', expression: '(x-2)^3' },
-  { name: 'Mixed (x+1)^2(x-1)', expression: '(x+1)^2(x-1)' },
+  { name: '(x+1)(x-2)', expression: '(x+1)*(x-2)' },
+  { name: '(x+2)(x-1)(x-3)', expression: '(x+2)*(x-1)*(x-3)' },
+  { name: '(x+1)^2', expression: '(x+1)^2' },
+  { name: '(x-2)^3', expression: '(x-2)^3' },
+  { name: '(x^2+1)(x-1)', expression: '(x^2+1)*(x-1)' },
+  { name: '(x+1)^2*(x-1)', expression: '(x+1)^2*(x-1)' },
+  { name: 'x(x-1)(x-2)(x-3)', expression: 'x*(x-1)*(x-2)*(x-3)' },
 ];
