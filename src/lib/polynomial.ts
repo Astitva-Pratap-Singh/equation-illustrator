@@ -1,426 +1,538 @@
 export interface Polynomial {
-  id: string;
-  expression: string;
-  coefficients: number[];
-  color: string;
-  visible: boolean;
+id: string;
+expression: string;
+coefficients: number[];
+color: string;
+visible: boolean;
 }
 
 export const GRAPH_COLORS = [
-  '#000000',  // black
-  '#2563eb',  // blue
-  '#dc2626',  // red
-  '#16a34a',  // green
-  '#9333ea',  // purple
-  '#ea580c',  // orange
+‘#000000’,  // black
+‘#2563eb’,  // blue
+‘#dc2626’,  // red
+‘#16a34a’,  // green
+‘#9333ea’,  // purple
+‘#ea580c’,  // orange
 ];
 
 export const COLOR_OPTIONS = [
-  { name: 'Black', value: '#000000' },
-  { name: 'Blue', value: '#2563eb' },
-  { name: 'Red', value: '#dc2626' },
-  { name: 'Green', value: '#16a34a' },
-  { name: 'Purple', value: '#9333ea' },
-  { name: 'Orange', value: '#ea580c' },
-  { name: 'Pink', value: '#db2777' },
-  { name: 'Teal', value: '#0d9488' },
+{ name: ‘Black’, value: ‘#000000’ },
+{ name: ‘Blue’, value: ‘#2563eb’ },
+{ name: ‘Red’, value: ‘#dc2626’ },
+{ name: ‘Green’, value: ‘#16a34a’ },
+{ name: ‘Purple’, value: ‘#9333ea’ },
+{ name: ‘Orange’, value: ‘#ea580c’ },
+{ name: ‘Pink’, value: ‘#db2777’ },
+{ name: ‘Teal’, value: ‘#0d9488’ },
 ];
 
-// Helper: Multiply two polynomials
+// ============================================================================
+// POLYNOMIAL OPERATIONS
+// ============================================================================
+
 function multiplyPolynomials(p1: number[], p2: number[]): number[] {
-  const result = new Array(p1.length + p2.length - 1).fill(0);
-  
-  for (let i = 0; i < p1.length; i++) {
-    for (let j = 0; j < p2.length; j++) {
-      result[i + j] += p1[i] * p2[j];
-    }
-  }
-  
-  return result;
+const result = new Array(p1.length + p2.length - 1).fill(0);
+
+for (let i = 0; i < p1.length; i++) {
+for (let j = 0; j < p2.length; j++) {
+result[i + j] += p1[i] * p2[j];
+}
 }
 
-// Helper: Add two polynomials
+return result;
+}
+
 function addPolynomials(p1: number[], p2: number[]): number[] {
-  const maxLen = Math.max(p1.length, p2.length);
-  const result = new Array(maxLen).fill(0);
-  
-  for (let i = 0; i < p1.length; i++) {
-    result[i] += p1[i];
-  }
-  for (let i = 0; i < p2.length; i++) {
-    result[i] += p2[i];
-  }
-  
-  return result;
+const maxLen = Math.max(p1.length, p2.length);
+const result = new Array(maxLen).fill(0);
+
+for (let i = 0; i < p1.length; i++) {
+result[i] += p1[i];
+}
+for (let i = 0; i < p2.length; i++) {
+result[i] += p2[i];
 }
 
-// Helper: Subtract two polynomials
+return result;
+}
+
 function subtractPolynomials(p1: number[], p2: number[]): number[] {
-  const maxLen = Math.max(p1.length, p2.length);
-  const result = new Array(maxLen).fill(0);
-  
-  for (let i = 0; i < p1.length; i++) {
-    result[i] += p1[i];
-  }
-  for (let i = 0; i < p2.length; i++) {
-    result[i] -= p2[i];
-  }
-  
-  return result;
+const maxLen = Math.max(p1.length, p2.length);
+const result = new Array(maxLen).fill(0);
+
+for (let i = 0; i < p1.length; i++) {
+result[i] += p1[i];
+}
+for (let i = 0; i < p2.length; i++) {
+result[i] -= p2[i];
 }
 
-// Helper: Divide polynomial by scalar
+return result;
+}
+
 function dividePolynomialByScalar(p: number[], scalar: number): number[] | null {
-  if (scalar === 0) return null;
-  return p.map(coeff => coeff / scalar);
+if (scalar === 0) return null;
+return p.map(coeff => coeff / scalar);
 }
 
-// Helper: Raise polynomial to a power
 function powerPolynomial(p: number[], n: number): number[] {
-  if (n === 0) return [1];
-  if (n === 1) return [...p];
-  
-  let result = [...p];
-  for (let i = 1; i < n; i++) {
-    result = multiplyPolynomials(result, p);
-  }
-  return result;
+if (n === 0) return [1];
+if (n === 1) return […p];
+if (n < 0 || n > 50) return [NaN]; // Safety limit
+
+let result = […p];
+for (let i = 1; i < n; i++) {
+result = multiplyPolynomials(result, p);
+}
+return result;
 }
 
-// Parse a basic polynomial (no operations, just terms)
-function parseBasicPolynomial(expression: string): number[] | null {
-  let cleaned = expression.replace(/\s/g, '').toLowerCase();
-  
-  if (!cleaned) return null;
-  
-  // Handle implicit multiplication (2x, 3x^2, etc.)
-  cleaned = cleaned.replace(/(\d)(x)/g, '$1*$2');
-  
-  const coefficients: Map<number, number> = new Map();
-  
-  // Split by + and -, keeping the signs
-  cleaned = cleaned.replace(/-/g, '+-');
-  const terms = cleaned.split('+').filter(t => t !== '');
-  
-  for (const term of terms) {
-    if (term === '') continue;
-    
-    if (term.includes('x')) {
-      let [coeffPart, powerPart] = term.split('x');
-      
-      // Parse coefficient
-      let coefficient = 1;
-      if (coeffPart === '' || coeffPart === '+') {
-        coefficient = 1;
-      } else if (coeffPart === '-') {
-        coefficient = -1;
-      } else {
-        const parsed = parseFloat(coeffPart.replace('*', ''));
-        coefficient = isNaN(parsed) ? 1 : parsed;
-      }
-      
-      // Parse power
-      let power = 1;
-      if (powerPart && powerPart.startsWith('^')) {
-        const parsed = parseInt(powerPart.substring(1));
-        power = isNaN(parsed) ? 1 : parsed;
-      }
-      
-      const current = coefficients.get(power) || 0;
-      coefficients.set(power, current + coefficient);
-    } else {
-      // Constant term
-      const value = parseFloat(term);
-      if (!isNaN(value)) {
-        const current = coefficients.get(0) || 0;
-        coefficients.set(0, current + value);
-      }
-    }
-  }
-  
-  if (coefficients.size === 0) return null;
-  
-  const maxPower = Math.max(...coefficients.keys(), 0);
-  const result: number[] = new Array(maxPower + 1).fill(0);
-  
-  coefficients.forEach((coeff, power) => {
-    result[power] = coeff;
-  });
-  
-  return result;
+// ============================================================================
+// ENHANCED PARSER WITH AST
+// ============================================================================
+
+interface ASTNode {
+type: ‘number’ | ‘variable’ | ‘unary’ | ‘binop’ | ‘power’;
+value?: number;
+op?: string;
+left?: ASTNode;
+right?: ASTNode;
+operand?: ASTNode;
+base?: ASTNode;
+exponent?: ASTNode;
 }
 
-// Tokenize expression into components
-interface Token {
-  type: 'poly' | 'op' | 'lparen' | 'rparen' | 'power';
-  value: string;
+class PolynomialParser {
+private expr: string;
+private pos: number;
+
+constructor(expression: string) {
+this.expr = expression.replace(/\s+/g, ‘’).toLowerCase();
+this.pos = 0;
+this.normalizeExpression();
 }
 
-function tokenize(expr: string): Token[] {
-  const tokens: Token[] = [];
-  let i = 0;
-  
-  while (i < expr.length) {
-    const char = expr[i];
-    
-    if (char === '(') {
-      tokens.push({ type: 'lparen', value: '(' });
-      i++;
-    } else if (char === ')') {
-      tokens.push({ type: 'rparen', value: ')' });
-      i++;
-    } else if (char === '+') {
-      tokens.push({ type: 'op', value: '+' });
-      i++;
-    } else if (char === '-') {
-      // Check if it's a negative sign or subtraction
-      if (i === 0 || expr[i-1] === '(' || expr[i-1] === '+' || expr[i-1] === '-' || expr[i-1] === '*' || expr[i-1] === '/') {
-        // It's a negative sign, include it in the next polynomial
-        let j = i + 1;
-        while (j < expr.length && expr[j] !== '+' && expr[j] !== '-' && expr[j] !== '*' && expr[j] !== '/' && expr[j] !== '(' && expr[j] !== ')' && expr[j] !== '^') {
-          j++;
-        }
-        tokens.push({ type: 'poly', value: expr.substring(i, j) });
-        i = j;
-      } else {
-        tokens.push({ type: 'op', value: '-' });
-        i++;
-      }
-    } else if (char === '*') {
-      tokens.push({ type: 'op', value: '*' });
-      i++;
-    } else if (char === '/') {
-      tokens.push({ type: 'op', value: '/' });
-      i++;
-    } else if (char === '^') {
-      tokens.push({ type: 'power', value: '^' });
-      i++;
-    } else if (char !== ' ') {
-      // Read polynomial term
-      let j = i;
-      while (j < expr.length && expr[j] !== '+' && expr[j] !== '-' && expr[j] !== '*' && expr[j] !== '/' && expr[j] !== '(' && expr[j] !== ')' && expr[j] !== '^' && expr[j] !== ' ') {
-        j++;
-      }
-      if (j > i) {
-        tokens.push({ type: 'poly', value: expr.substring(i, j) });
-        i = j;
-      } else {
-        i++;
-      }
-    } else {
-      i++;
-    }
-  }
-  
-  return tokens;
+private normalizeExpression(): void {
+// Add explicit multiplication operators where needed
+this.expr = this.expr
+.replace(/(\d)(()/g, ‘$1*(’)           // 2(x) → 2*(x)
+.replace(/())(()/g, ‘)*(’)            // )( → )*(
+.replace(/())(\d)/g, ‘)*$2’)           // )2 → )*2
+.replace(/(\d)(x)/g, ’$1*$2’)           // 2x → 2*x
+.replace(/())(x)/g, ‘)*$2’)            // )x → )*x
+.replace(/(x)(()/g, ’$1*(’)            // x( → x*(
+.replace(/(x)(\d)/g, ‘$1*$2’);          // x2 → x*2
 }
 
-// Parse expression with proper operator precedence
-function parseExpression(tokens: Token[], start: number = 0, end?: number): { result: number[] | null, endIndex: number } {
-  if (end === undefined) end = tokens.length;
-  
-  // Handle parentheses and build expression tree
-  let i = start;
-  const values: number[][] = [];
-  const operators: string[] = [];
-  
-  while (i < end) {
-    const token = tokens[i];
-    
-    if (token.type === 'lparen') {
-      // Find matching closing parenthesis
-      let depth = 1;
-      let j = i + 1;
-      while (j < end && depth > 0) {
-        if (tokens[j].type === 'lparen') depth++;
-        if (tokens[j].type === 'rparen') depth--;
-        j++;
-      }
-      
-      // Parse the content inside parentheses
-      const inner = parseExpression(tokens, i + 1, j - 1);
-      if (inner.result) {
-        // Check for power after parenthesis
-        if (j < end && tokens[j]?.type === 'power' && j + 1 < end && tokens[j + 1]?.type === 'poly') {
-          const power = parseInt(tokens[j + 1].value);
-          if (!isNaN(power)) {
-            values.push(powerPolynomial(inner.result, power));
-            i = j + 2;
-            continue;
-          }
-        }
-        values.push(inner.result);
-      }
-      i = j;
-    } else if (token.type === 'poly') {
-      const poly = parseBasicPolynomial(token.value);
-      if (poly) {
-        values.push(poly);
-      }
-      i++;
-    } else if (token.type === 'op') {
-      operators.push(token.value);
-      i++;
-    } else {
-      i++;
-    }
-  }
-  
-  if (values.length === 0) return { result: null, endIndex: end };
-  
-  // Apply operators with precedence (*, / before +, -)
-  // First pass: handle * and /
-  let j = 0;
-  while (j < operators.length) {
-    if (operators[j] === '*') {
-      const result = multiplyPolynomials(values[j], values[j + 1]);
-      values.splice(j, 2, result);
-      operators.splice(j, 1);
-    } else if (operators[j] === '/') {
-      // Division: divide by a constant only
-      const divisor = values[j + 1];
-      if (divisor.length === 1) {
-        const result = dividePolynomialByScalar(values[j], divisor[0]);
-        if (result) {
-          values.splice(j, 2, result);
-          operators.splice(j, 1);
-        } else {
-          j++;
-        }
-      } else {
-        // Can't divide by non-constant polynomial
-        j++;
-      }
-    } else {
-      j++;
-    }
-  }
-  
-  // Second pass: handle + and -
-  let result = values[0];
-  j = 0;
-  while (j < operators.length) {
-    if (operators[j] === '+') {
-      result = addPolynomials(result, values[j + 1]);
-    } else if (operators[j] === '-') {
-      result = subtractPolynomials(result, values[j + 1]);
-    }
-    j++;
-  }
-  
-  return { result, endIndex: end };
+parse(): ASTNode | null {
+try {
+const ast = this.parseExpression();
+if (this.pos < this.expr.length) {
+throw new Error(`Unexpected character at position ${this.pos}: '${this.expr[this.pos]}'`);
+}
+return ast;
+} catch (error) {
+console.error(‘Parse error:’, error);
+return null;
+}
 }
 
-// Main parser
-export function parsePolynomial(expression: string): number[] | null {
-  try {
-    let cleaned = expression.replace(/\s/g, '').toLowerCase();
-    
-    if (!cleaned) return null;
-    
-    // Tokenize the expression
-    const tokens = tokenize(cleaned);
-    
-    if (tokens.length === 0) return null;
-    
-    // Parse the expression
-    const parsed = parseExpression(tokens);
-    
-    return parsed.result;
-    
-  } catch (error) {
-    console.error('Error parsing polynomial:', error);
+// Expression: handles + and - (lowest precedence)
+private parseExpression(): ASTNode {
+let left = this.parseTerm();
+
+```
+while (this.pos < this.expr.length) {
+  const char = this.peek();
+  if (char !== '+' && char !== '-') break;
+  
+  const op = this.consume();
+  const right = this.parseTerm();
+  left = { type: 'binop', op, left, right };
+}
+
+return left;
+```
+
+}
+
+// Term: handles * and / (medium precedence)
+private parseTerm(): ASTNode {
+let left = this.parseFactor();
+
+```
+while (this.pos < this.expr.length) {
+  const char = this.peek();
+  if (char !== '*' && char !== '/') break;
+  
+  const op = this.consume();
+  const right = this.parseFactor();
+  left = { type: 'binop', op, left, right };
+}
+
+return left;
+```
+
+}
+
+// Factor: handles ^ (highest precedence)
+private parseFactor(): ASTNode {
+let base = this.parsePrimary();
+
+```
+if (this.pos < this.expr.length && this.peek() === '^') {
+  this.consume(); // consume '^'
+  const exponent = this.parseFactor(); // Right associative
+  base = { type: 'power', base, exponent };
+}
+
+return base;
+```
+
+}
+
+// Primary: handles numbers, variables, parentheses, and unary minus
+private parsePrimary(): ASTNode {
+// Skip whitespace (shouldn’t exist after normalization, but just in case)
+while (this.pos < this.expr.length && this.expr[this.pos] === ’ ’) {
+this.pos++;
+}
+
+```
+// Handle parentheses
+if (this.peek() === '(') {
+  this.consume(); // consume '('
+  const expr = this.parseExpression();
+  if (this.peek() !== ')') {
+    throw new Error(`Expected ')' at position ${this.pos}`);
+  }
+  this.consume(); // consume ')'
+  return expr;
+}
+
+// Handle unary minus
+if (this.peek() === '-') {
+  this.consume(); // consume '-'
+  const operand = this.parsePrimary();
+  return { type: 'unary', op: '-', operand };
+}
+
+// Handle unary plus (just ignore it)
+if (this.peek() === '+') {
+  this.consume(); // consume '+'
+  return this.parsePrimary();
+}
+
+// Handle variable 'x'
+if (this.peek() === 'x') {
+  this.consume(); // consume 'x'
+  return { type: 'variable' };
+}
+
+// Handle number
+return this.parseNumber();
+```
+
+}
+
+private parseNumber(): ASTNode {
+let numStr = ‘’;
+let hasDecimal = false;
+
+```
+while (this.pos < this.expr.length) {
+  const char = this.peek();
+  
+  if (char >= '0' && char <= '9') {
+    numStr += this.consume();
+  } else if (char === '.' && !hasDecimal) {
+    hasDecimal = true;
+    numStr += this.consume();
+  } else {
+    break;
+  }
+}
+
+if (numStr === '' || numStr === '.') {
+  throw new Error(`Expected number at position ${this.pos}`);
+}
+
+const value = parseFloat(numStr);
+if (!Number.isFinite(value)) {
+  throw new Error(`Invalid number: ${numStr}`);
+}
+
+return { type: 'number', value };
+```
+
+}
+
+private peek(): string {
+return this.expr[this.pos] || ‘’;
+}
+
+private consume(): string {
+return this.expr[this.pos++] || ‘’;
+}
+}
+
+// Evaluate AST to polynomial coefficients
+function evaluateAST(node: ASTNode | null): number[] | null {
+if (!node) return null;
+
+switch (node.type) {
+case ‘number’:
+return [node.value!];
+
+```
+case 'variable':
+  return [0, 1]; // x = 0 + 1*x
+
+case 'unary':
+  if (node.op === '-') {
+    const operand = evaluateAST(node.operand!);
+    return operand ? operand.map(c => -c) : null;
+  }
+  return null;
+
+case 'binop': {
+  const left = evaluateAST(node.left!);
+  const right = evaluateAST(node.right!);
+  
+  if (!left || !right) return null;
+
+  switch (node.op) {
+    case '+':
+      return addPolynomials(left, right);
+    case '-':
+      return subtractPolynomials(left, right);
+    case '*':
+      return multiplyPolynomials(left, right);
+    case '/':
+      // Only allow division by constants
+      if (right.length === 1 && right[0] !== 0) {
+        return dividePolynomialByScalar(left, right[0]);
+      }
+      console.error('Cannot divide by non-constant polynomial');
+      return null;
+    default:
+      return null;
+  }
+}
+
+case 'power': {
+  const base = evaluateAST(node.base!);
+  const exponent = evaluateAST(node.exponent!);
+  
+  if (!base || !exponent) return null;
+  
+  // Exponent must be a constant non-negative integer
+  if (exponent.length !== 1) {
+    console.error('Exponent must be a constant');
     return null;
   }
+  
+  const exp = Math.round(exponent[0]);
+  if (exp < 0 || exp > 50) {
+    console.error('Exponent out of range (0-50)');
+    return null;
+  }
+  
+  return powerPolynomial(base, exp);
 }
+
+default:
+  return null;
+```
+
+}
+}
+
+// ============================================================================
+// MAIN PARSER FUNCTION
+// ============================================================================
+
+export function parsePolynomial(expression: string): number[] | null {
+try {
+if (!expression || !expression.trim()) return null;
+
+```
+const parser = new PolynomialParser(expression);
+const ast = parser.parse();
+
+if (!ast) return null;
+
+const coefficients = evaluateAST(ast);
+
+if (!coefficients) return null;
+
+// Validate all coefficients are finite
+if (coefficients.some(c => !Number.isFinite(c))) {
+  console.error('Invalid coefficients detected');
+  return null;
+}
+
+// Remove trailing zeros (but keep at least [0] for zero polynomial)
+while (coefficients.length > 1 && Math.abs(coefficients[coefficients.length - 1]) < 1e-10) {
+  coefficients.pop();
+}
+
+return coefficients;
+```
+
+} catch (error) {
+console.error(‘Error parsing polynomial:’, error);
+return null;
+}
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 export function evaluatePolynomial(coefficients: number[], x: number): number {
-  // Using Horner's method for better numerical stability
-  if (coefficients.length === 0) return 0;
-  
-  let result = coefficients[coefficients.length - 1];
-  for (let i = coefficients.length - 2; i >= 0; i--) {
-    result = result * x + coefficients[i];
-  }
-  return result;
+if (!coefficients || coefficients.length === 0) return 0;
+
+// Horner’s method for efficient and numerically stable evaluation
+let result = coefficients[coefficients.length - 1];
+for (let i = coefficients.length - 2; i >= 0; i–) {
+result = result * x + coefficients[i];
 }
 
-// Get polynomial degree
+return result;
+}
+
 export function getDegree(coefficients: number[]): number {
-  for (let i = coefficients.length - 1; i >= 0; i--) {
-    if (coefficients[i] !== 0) return i;
-  }
-  return 0;
+if (!coefficients || coefficients.length === 0) return 0;
+
+for (let i = coefficients.length - 1; i >= 0; i–) {
+if (Math.abs(coefficients[i]) > 1e-10) return i;
+}
+return 0;
 }
 
-// Format polynomial as readable string
 export function formatPolynomial(coefficients: number[]): string {
-  const terms: string[] = [];
-  
-  for (let i = coefficients.length - 1; i >= 0; i--) {
-    const coeff = coefficients[i];
-    if (Math.abs(coeff) < 1e-10) continue; // Skip near-zero coefficients
-    
-    let term = '';
-    const absCoeff = Math.abs(coeff);
-    const sign = coeff > 0 ? '+' : '-';
-    
-    // Round to avoid floating point errors
-    const roundedCoeff = Math.round(absCoeff * 1000) / 1000;
-    
-    if (i === 0) {
-      term = `${sign} ${roundedCoeff}`;
-    } else if (i === 1) {
-      if (Math.abs(roundedCoeff - 1) < 1e-10) {
-        term = `${sign} x`;
-      } else {
-        term = `${sign} ${roundedCoeff}x`;
-      }
-    } else {
-      if (Math.abs(roundedCoeff - 1) < 1e-10) {
-        term = `${sign} x^${i}`;
-      } else {
-        term = `${sign} ${roundedCoeff}x^${i}`;
-      }
-    }
-    
-    terms.push(term);
+if (!coefficients || coefficients.length === 0) return ‘0’;
+
+const terms: string[] = [];
+
+for (let i = coefficients.length - 1; i >= 0; i–) {
+const coeff = coefficients[i];
+if (Math.abs(coeff) < 1e-10) continue;
+
+```
+const sign = coeff > 0 ? '+' : '-';
+const absCoeff = Math.abs(coeff);
+const roundedCoeff = Math.round(absCoeff * 10000) / 10000;
+
+let term = '';
+
+if (i === 0) {
+  // Constant term
+  term = `${sign} ${roundedCoeff}`;
+} else if (i === 1) {
+  // Linear term
+  if (Math.abs(roundedCoeff - 1) < 1e-10) {
+    term = `${sign} x`;
+  } else {
+    term = `${sign} ${roundedCoeff}x`;
   }
-  
-  if (terms.length === 0) return '0';
-  
-  let result = terms.join(' ');
-  if (result.startsWith('+ ')) {
-    result = result.substring(2);
+} else {
+  // Higher degree terms
+  if (Math.abs(roundedCoeff - 1) < 1e-10) {
+    term = `${sign} x^${i}`;
+  } else {
+    term = `${sign} ${roundedCoeff}x^${i}`;
   }
-  
-  return result;
 }
 
-// Calculate derivative
+terms.push(term);
+```
+
+}
+
+if (terms.length === 0) return ‘0’;
+
+let result = terms.join(’ ‘);
+if (result.startsWith(’+ ’)) {
+result = result.substring(2);
+}
+
+return result;
+}
+
 export function getDerivative(coefficients: number[]): number[] {
-  if (coefficients.length <= 1) return [0];
-  
-  const result = new Array(coefficients.length - 1);
-  for (let i = 1; i < coefficients.length; i++) {
-    result[i - 1] = coefficients[i] * i;
-  }
-  
-  return result;
+if (!coefficients || coefficients.length <= 1) return [0];
+
+const result = new Array(coefficients.length - 1);
+for (let i = 1; i < coefficients.length; i++) {
+result[i - 1] = coefficients[i] * i;
+}
+
+return result;
+}
+
+export function getIntegral(coefficients: number[], constant: number = 0): number[] {
+if (!coefficients || coefficients.length === 0) return [constant];
+
+const result = new Array(coefficients.length + 1);
+result[0] = constant;
+
+for (let i = 0; i < coefficients.length; i++) {
+result[i + 1] = coefficients[i] / (i + 1);
+}
+
+return result;
+}
+
+export function findRoots(coefficients: number[]): number[] {
+if (!coefficients || coefficients.length === 0) return [];
+
+const degree = getDegree(coefficients);
+
+// Linear: ax + b = 0 → x = -b/a
+if (degree === 1) {
+const [b, a] = coefficients;
+if (Math.abs(a) > 1e-10) {
+return [-b / a];
+}
+return [];
+}
+
+// Quadratic: ax² + bx + c = 0
+if (degree === 2) {
+const [c, b, a] = coefficients;
+const discriminant = b * b - 4 * a * c;
+
+```
+if (discriminant >= 0) {
+  const sqrtDisc = Math.sqrt(discriminant);
+  const root1 = (-b + sqrtDisc) / (2 * a);
+  const root2 = (-b - sqrtDisc) / (2 * a);
+  return Math.abs(root1 - root2) < 1e-10 ? [root1] : [root1, root2];
+}
+return []; // Complex roots
+```
+
+}
+
+// For higher degrees, numerical approximation would be needed
+// This is a basic implementation
+return [];
 }
 
 export const PRESET_POLYNOMIALS = [
-  { name: 'Linear', expression: 'x' },
-  { name: 'Quadratic', expression: 'x^2' },
-  { name: 'Cubic', expression: 'x^3' },
-  { name: 'Parabola', expression: 'x^2 - 4' },
-  { name: 'S-curve', expression: 'x^3 - 3x' },
-  { name: 'Quartic', expression: 'x^4 - 5x^2 + 4' },
-  { name: '(x+1)(x-2)', expression: '(x+1)*(x-2)' },
-  { name: '(x+2)(x-1)(x-3)', expression: '(x+2)*(x-1)*(x-3)' },
-  { name: '(x+1)^2', expression: '(x+1)^2' },
-  { name: '(x-2)^3', expression: '(x-2)^3' },
-  { name: '(x^2+1)(x-1)', expression: '(x^2+1)*(x-1)' },
-  { name: '(x+1)^2*(x-1)', expression: '(x+1)^2*(x-1)' },
-  { name: 'x(x-1)(x-2)(x-3)', expression: 'x*(x-1)*(x-2)*(x-3)' },
+{ name: ‘Linear’, expression: ‘x’, description: ‘Simple line’ },
+{ name: ‘Quadratic’, expression: ‘x^2’, description: ‘Basic parabola’ },
+{ name: ‘Cubic’, expression: ‘x^3’, description: ‘Basic cubic’ },
+{ name: ‘Parabola’, expression: ‘x^2 - 4’, description: ‘Shifted parabola’ },
+{ name: ‘S-curve’, expression: ‘x^3 - 3*x’, description: ‘Cubic with inflection’ },
+{ name: ‘Quartic’, expression: ’x^4 - 5*x^2 + 4’, description: ‘Fourth degree’ },
+{ name: ‘(x+1)(x-2)’, expression: ‘(x+1)*(x-2)’, description: ‘Product of linear factors’ },
+{ name: ‘(x+2)(x-1)(x-3)’, expression: ’(x+2)*(x-1)*(x-3)’, description: ‘Three factor product’ },
+{ name: ‘(x+1)^2’, expression: ‘(x+1)^2’, description: ‘Perfect square’ },
+{ name: ‘(x-2)^3’, expression: ‘(x-2)^3’, description: ‘Perfect cube’ },
+{ name: ‘(x^2+1)(x-1)’, expression: ’(x^2+1)*(x-1)’, description: ‘Mixed degree product’ },
+{ name: ‘(x+1)^2*(x-1)’, expression: ‘(x+1)^2*(x-1)’, description: ‘Complex factorization’ },
+{ name: ‘x(x-1)(x-2)(x-3)’, expression: ‘x*(x-1)*(x-2)*(x-3)’, description: ‘Quartic with 4 roots’ },
 ];
